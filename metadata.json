@@ -1,0 +1,6 @@
+{
+  "name": "ZUCCHERO Waktu Sholat AI",
+  "description": "Aplikasi asisten waktu sholat Muslim dengan fitur AI Gemini, petunjuk Kiblat, and notifikasi log WhatsApp lokal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
