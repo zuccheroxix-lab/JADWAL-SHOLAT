@@ -11,7 +11,12 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
+import com.example.data.database.AppDatabase
+import com.example.data.database.PrayerNotificationLog
 import com.example.data.preferences.SettingsManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class AdzanReceiver : BroadcastReceiver() {
     private val TAG = "AdzanReceiver"
@@ -81,5 +86,30 @@ class AdzanReceiver : BroadcastReceiver() {
             .setVibrate(longArrayOf(1000, 1000, 1000, 1000))
 
         notificationManager.notify(prayerName.hashCode(), builder.build())
+
+        // Save to local PrayerNotificationLog Room Database if triggered from background alarm
+        val fromViewModel = intent.getBooleanExtra("EXTRA_FROM_VIEWMODEL", false)
+        if (!fromViewModel) {
+            val currentTimeFormatted = java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(java.util.Date())
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val db = com.example.data.database.AppDatabase.getDatabase(context)
+                    db.prayerNotificationLogDao().insertLog(
+                        com.example.data.database.PrayerNotificationLog(
+                            prayerName = prayerName,
+                            title = title,
+                            message = text,
+                            prayerTime = currentTimeFormatted,
+                            timestamp = System.currentTimeMillis(),
+                            isPreReminder = isPreReminder,
+                            locationName = settings.cityName
+                        )
+                    )
+                    Log.d(TAG, "Successfully logged prayer notification to Room DB: $prayerName")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to log prayer notification to Room DB", e)
+                }
+            }
+        }
     }
 }

@@ -21,6 +21,18 @@ data class ChatMessage(
     val timestamp: Long
 )
 
+@Entity(tableName = "prayer_notification_logs")
+data class PrayerNotificationLog(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val prayerName: String,
+    val title: String,
+    val message: String,
+    val prayerTime: String,
+    val timestamp: Long,
+    val isPreReminder: Boolean = false,
+    val locationName: String = ""
+)
+
 @Dao
 interface WaNotificationDao {
     @Query("SELECT * FROM wa_notifications ORDER BY timestamp DESC")
@@ -48,10 +60,26 @@ interface ChatMessageDao {
     suspend fun clearHistory()
 }
 
-@Database(entities = [WaNotification::class, ChatMessage::class], version = 1, exportSchema = false)
+@Dao
+interface PrayerNotificationLogDao {
+    @Query("SELECT * FROM prayer_notification_logs ORDER BY timestamp DESC")
+    fun getAllLogs(): Flow<List<PrayerNotificationLog>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLog(log: PrayerNotificationLog)
+
+    @Query("DELETE FROM prayer_notification_logs WHERE id = :id")
+    suspend fun deleteLog(id: Long)
+
+    @Query("DELETE FROM prayer_notification_logs")
+    suspend fun clearAllLogs()
+}
+
+@Database(entities = [WaNotification::class, ChatMessage::class, PrayerNotificationLog::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun waNotificationDao(): WaNotificationDao
     abstract fun chatMessageDao(): ChatMessageDao
+    abstract fun prayerNotificationLogDao(): PrayerNotificationLogDao
 
     companion object {
         @Volatile

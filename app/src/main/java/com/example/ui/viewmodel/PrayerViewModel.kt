@@ -18,9 +18,12 @@ import com.example.utils.PrayerTimeCalculator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.example.data.database.PrayerNotificationLog
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -38,6 +41,8 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
     private val settings = SettingsManager(application)
     private val fusedLocationClient = LocationServices.getFusedLocationProviderClient(application)
 
+    private val prayerLogRepo = com.example.data.database.PrayerLogRepository(application)
+
     private val _prayerTimes = MutableStateFlow<PrayerTimes?>(null)
     val prayerTimes: StateFlow<PrayerTimes?> = _prayerTimes.asStateFlow()
 
@@ -52,6 +57,13 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _activeBrowserNotification = MutableStateFlow<BrowserNotificationAlert?>(null)
     val activeBrowserNotification: StateFlow<BrowserNotificationAlert?> = _activeBrowserNotification.asStateFlow()
+
+    val prayerLogs: StateFlow<List<PrayerNotificationLog>> = prayerLogRepo.allLogs
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     init {
         _currentLocationName.value = settings.cityName
@@ -145,12 +157,25 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
             iconType = if (isPreReminder) "PRE_REMINDER" else "PRAYER"
         )
 
+        // Directly log to local Room database
+        viewModelScope.launch(Dispatchers.IO) {
+            prayerLogRepo.logNotification(
+                prayerName = prayerName,
+                title = title,
+                message = message,
+                prayerTime = timeStr,
+                isPreReminder = isPreReminder,
+                locationName = _currentLocationName.value
+            )
+        }
+
         // Fire background Broadcast to also register native Android notification
         try {
             val context = getApplication<Application>()
             val intent = Intent(context, AdzanReceiver::class.java).apply {
                 putExtra("PRAYER_NAME", prayerName)
                 putExtra("IS_PRE_REMINDER", isPreReminder)
+                putExtra("EXTRA_FROM_VIEWMODEL", true)
             }
             context.sendBroadcast(intent)
         } catch (e: Exception) {
@@ -165,6 +190,18 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun dismissBrowserNotification() {
         _activeBrowserNotification.value = null
+    }
+
+    fun deletePrayerLog(id: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            prayerLogRepo.deleteLog(id)
+        }
+    }
+
+    fun clearPrayerLogs() {
+        viewModelScope.launch(Dispatchers.IO) {
+            prayerLogRepo.clearAllLogs()
+        }
     }
 
     fun loadPrayerTimes() {
