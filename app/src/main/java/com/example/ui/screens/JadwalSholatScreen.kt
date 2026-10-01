@@ -24,7 +24,7 @@ import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun JadwalSholatScreen() {
+fun JadwalSholatScreen(viewModel: com.example.ui.viewmodel.PrayerViewModel? = null) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val settings = remember { SettingsManager(context) }
     var selectedTab by remember { mutableStateOf(0) } // 0 = Hari Ini, 1 = Besok
@@ -32,7 +32,10 @@ fun JadwalSholatScreen() {
     val calendarToday = Calendar.getInstance()
     val calendarTomorrow = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, 1) }
 
-    val timesToday = PrayerTimeCalculator.calculateTimes(
+    val vmTimes by viewModel?.prayerTimes?.collectAsState() ?: remember { mutableStateOf(null) }
+    val dataSourceInfo by viewModel?.dataSourceInfo?.collectAsState() ?: remember { mutableStateOf("Aladhan API") }
+
+    val timesToday = vmTimes ?: PrayerTimeCalculator.calculateTimes(
         settings.latitude.toDouble(),
         settings.longitude.toDouble(),
         settings.calculationMethod,
@@ -193,13 +196,13 @@ fun JadwalSholatScreen() {
                         Spacer(modifier = Modifier.width(16.dp))
                         Column {
                             Text(
-                                text = "Metode Perhitungan",
+                                text = "Sumber Data: $dataSourceInfo",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "Saat ini menggunakan metode: " + settings.calculationMethod + " sesuai koordinat: ${settings.latitude}, ${settings.longitude}.",
+                                text = "Metode perhitungan: ${settings.calculationMethod} (Koordinat GPS: ${settings.latitude}, ${settings.longitude}).",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

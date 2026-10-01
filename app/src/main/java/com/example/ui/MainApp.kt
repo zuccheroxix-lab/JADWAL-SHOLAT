@@ -114,7 +114,7 @@ fun MainApp() {
                         BerandaScreen(viewModel = prayerViewModel)
                     }
                     composable(ROUTE_PRAYER) {
-                        JadwalSholatScreen()
+                        JadwalSholatScreen(viewModel = prayerViewModel)
                     }
                     composable(ROUTE_QIBLA) {
                         KiblatScreen()

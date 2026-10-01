@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.NotificationsActive
@@ -46,6 +48,10 @@ fun BerandaScreen(viewModel: PrayerViewModel) {
     val prayerTimes by viewModel.prayerTimes.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val prayerLogs by viewModel.prayerLogs.collectAsState()
+    val dataSourceInfo by viewModel.dataSourceInfo.collectAsState()
+    val isFromApi by viewModel.isFromApi.collectAsState()
+    val lastSyncTime by viewModel.lastSyncTime.collectAsState()
+    var showApkGuideDialog by remember { mutableStateOf(false) }
 
     // Location Permission Launcher
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -122,12 +128,26 @@ fun BerandaScreen(viewModel: PrayerViewModel) {
         ) {
             // Live Clock, Hijri date, and Greetings card
             item {
-                GreetingsCard(currentTime, locationName, prayerTimes)
+                GreetingsCard(
+                    time = currentTime,
+                    location = locationName,
+                    times = prayerTimes,
+                    dataSourceInfo = dataSourceInfo,
+                    isFromApi = isFromApi,
+                    lastSyncTime = lastSyncTime
+                )
             }
 
             // Next Prayer Countdown
             item {
                 prayerTimes?.let { CountdownCard(it) } ?: CardPlaceholder()
+            }
+
+            // Download APK & GitHub Release section
+            item {
+                GitHubApkCard(
+                    onOpenGuide = { showApkGuideDialog = true }
+                )
             }
 
             // Quick Location manual picker panel
@@ -305,10 +325,21 @@ fun BerandaScreen(viewModel: PrayerViewModel) {
             }
         }
     }
+
+    if (showApkGuideDialog) {
+        ApkDownloadGuideDialog(onDismiss = { showApkGuideDialog = false })
+    }
 }
 
 @Composable
-fun GreetingsCard(time: String, location: String, times: PrayerTimes?) {
+fun GreetingsCard(
+    time: String,
+    location: String,
+    times: PrayerTimes?,
+    dataSourceInfo: String = "Aladhan API (Akurat)",
+    isFromApi: Boolean = true,
+    lastSyncTime: String = ""
+) {
     val hrs = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
     val greeting = when (hrs) {
         in 0..9 -> "Selamat Pagi / Sabahul Khair"
@@ -401,6 +432,33 @@ fun GreetingsCard(time: String, location: String, times: PrayerTimes?) {
                     fontSize = 32.sp,
                     letterSpacing = 1.sp
                 )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Aladhan API & GPS live status indicator badge
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = if (isFromApi) Color(0xFF1B5E20).copy(alpha = 0.45f) else Color(0xFFE65100).copy(alpha = 0.45f)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (isFromApi) Icons.Default.CloudDone else Icons.Default.CloudQueue,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (lastSyncTime.isNotEmpty()) "$dataSourceInfo • Sinkron: $lastSyncTime" else dataSourceInfo,
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         }
     }
@@ -701,4 +759,206 @@ fun CardPlaceholder() {
     ) {
         CircularProgressIndicator()
     }
+}
+
+@Composable
+fun GitHubApkCard(onOpenGuide: () -> Unit) {
+    val context = LocalContext.current
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("github_apk_card")
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .background(MaterialTheme.colorScheme.primary, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Android,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Download APK & Rilis GitHub",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Build Sukses: app-debug.apk (v1.0)",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "APK siap diinstal di HP Android dan dipublikasikan ke GitHub Releases agar bisa diunduh langsung via link publik.",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 16.sp
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clip = android.content.ClipData.newPlainText(
+                            "Format Link GitHub",
+                            "https://github.com/<username>/<repo>/releases/download/v1.0.0/app-debug.apk"
+                        )
+                        clipboard.setPrimaryClip(clip)
+                        android.widget.Toast.makeText(context, "Format link rilis disalin!", android.widget.Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Salin Link", fontSize = 12.sp)
+                }
+
+                Button(
+                    onClick = onOpenGuide,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Panduan Unduh", fontSize = 12.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ApkDownloadGuideDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.CloudDownload,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(32.dp)
+            )
+        },
+        title = {
+            Text("Cara Unduh & Rilis APK", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "1. Lokasi File APK:",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Text(
+                        text = "app/build/outputs/apk/debug/app-debug.apk",
+                        modifier = Modifier.padding(8.dp),
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        fontSize = 11.sp
+                    )
+                }
+
+                Text(
+                    text = "2. Cara Download dari AI Studio:",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+                Text(
+                    text = "• Buka menu pengaturan / export di pojok kanan atas AI Studio.\n• Klik 'Export as ZIP' untuk mengunduh seluruh proyek beserta file APK.\n• Atau gunakan file explorer di browser untuk mengunduh 'app-debug.apk'.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Text(
+                    text = "3. Cara Publish ke GitHub Releases:",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+                Text(
+                    text = "• Push repository project ini ke GitHub Anda.\n• Di repo GitHub, klik tab 'Releases' di sebelah kanan ➔ 'Draft a new release'.\n• Buat Tag baru (contoh: v1.0.0).\n• Drag and drop file app-debug.apk ke kolom Attach binaries.\n• Klik 'Publish release'.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Text(
+                    text = "4. Format Link Download Publik:",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Text(
+                        text = "https://github.com/<username>/<repo>/releases/download/v1.0.0/app-debug.apk",
+                        modifier = Modifier.padding(8.dp),
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("Tutup")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = {
+                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    val clip = android.content.ClipData.newPlainText(
+                        "Format URL GitHub",
+                        "https://github.com/<username>/<repo>/releases/download/v1.0.0/app-debug.apk"
+                    )
+                    clipboard.setPrimaryClip(clip)
+                    android.widget.Toast.makeText(context, "Format URL disalin ke clipboard!", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            ) {
+                Text("Salin Link Format")
+            }
+        }
+    )
 }

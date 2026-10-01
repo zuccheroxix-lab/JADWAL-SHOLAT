@@ -10,7 +10,11 @@ import androidx.lifecycle.viewModelScope
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
+import com.example.data.database.PrayerNotificationLog
+import com.example.data.database.PrayerLogRepository
 import com.example.data.model.PrayerTimes
+import com.example.data.network.aladhan.AladhanRepository
+import com.example.data.network.aladhan.PrayerFetchResult
 import com.example.data.preferences.SettingsManager
 import com.example.services.AdzanReceiver
 import com.example.utils.AlarmScheduler
@@ -23,7 +27,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import com.example.data.database.PrayerNotificationLog
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -40,8 +43,8 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
     private val TAG = "PrayerViewModel"
     private val settings = SettingsManager(application)
     private val fusedLocationClient = LocationServices.getFusedLocationProviderClient(application)
-
-    private val prayerLogRepo = com.example.data.database.PrayerLogRepository(application)
+    private val aladhanRepo = AladhanRepository()
+    private val prayerLogRepo = PrayerLogRepository(application)
 
     private val _prayerTimes = MutableStateFlow<PrayerTimes?>(null)
     val prayerTimes: StateFlow<PrayerTimes?> = _prayerTimes.asStateFlow()
@@ -54,6 +57,15 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    private val _dataSourceInfo = MutableStateFlow("Aladhan API (Akurat)")
+    val dataSourceInfo: StateFlow<String> = _dataSourceInfo.asStateFlow()
+
+    private val _isFromApi = MutableStateFlow(false)
+    val isFromApi: StateFlow<Boolean> = _isFromApi.asStateFlow()
+
+    private val _lastSyncTime = MutableStateFlow("")
+    val lastSyncTime: StateFlow<String> = _lastSyncTime.asStateFlow()
 
     private val _activeBrowserNotification = MutableStateFlow<BrowserNotificationAlert?>(null)
     val activeBrowserNotification: StateFlow<BrowserNotificationAlert?> = _activeBrowserNotification.asStateFlow()
@@ -82,11 +94,11 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
                 // Tick the countdown
                 _prayerTimes.value?.let { currentTimes ->
                     _prayerTimes.value = PrayerTimeCalculator.enrichWithCountdown(currentTimes)
-                    
+
                     // Trigger real-time browser alerts when match is found at start of a minute
                     if (now.get(Calendar.SECOND) == 0) {
                         val currentMinuteStr = String.format(Locale.US, "%02d:%02d", now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE))
-                        
+
                         val matchingPrayer = when (currentMinuteStr) {
                             currentTimes.subuh -> "Subuh"
                             currentTimes.dzuhur -> "Dzuhur"
@@ -142,7 +154,7 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
         val message: String
         if (isPreReminder) {
             title = "10 Menit Menuju $prayerName"
-            message = "Bersiaplah, sebentar lagi waktu sholat $prayerName makan segera tiba."
+            message = "Bersiaplah, sebentar lagi waktu sholat $prayerName akan segera tiba."
         } else {
             title = "Waktu Sholat $prayerName Telah Tiba!"
             message = "Mari tegakkan sholat tepat waktu. Suara adzan: ${settings.adzanSound}."
@@ -204,27 +216,67 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    /**
+     * Primary loader that queries the Aladhan API via Retrofit
+     * with current coordinates (GPS or selected manual city).
+     */
     fun loadPrayerTimes() {
-        viewModelScope.launch(Dispatchers.Default) {
-            val cal = Calendar.getInstance()
-            val baseTimes = PrayerTimeCalculator.calculateTimes(
-                settings.latitude.toDouble(),
-                settings.longitude.toDouble(),
-                settings.calculationMethod,
-                cal
-            )
-            val enriched = PrayerTimeCalculator.enrichWithCountdown(baseTimes)
-            _prayerTimes.value = enriched
+        fetchPrayerTimes(
+            latitude = settings.latitude.toDouble(),
+            longitude = settings.longitude.toDouble(),
+            locationLabel = settings.cityName
+        )
+    }
 
-            // Reschedule device alarms for fresh times
-            AlarmScheduler.scheduleAlarms(getApplication())
+    /**
+     * Fetches prayer times from Aladhan API service via Retrofit
+     */
+    private fun fetchPrayerTimes(latitude: Double, longitude: Double, locationLabel: String) {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            val nowTimeFormat = SimpleDateFormat("HH:mm", Locale.US).format(Date())
+
+            val result = aladhanRepo.getPrayerTimes(
+                latitude = latitude,
+                longitude = longitude,
+                calculationMethod = settings.calculationMethod
+            )
+
+            when (result) {
+                is PrayerFetchResult.Success -> {
+                    _prayerTimes.value = result.prayerTimes
+                    _isFromApi.value = true
+                    _dataSourceInfo.value = if (settings.useGps) "Aladhan API (GPS Akurat)" else "Aladhan API (${result.prayerTimes.date})"
+                    _lastSyncTime.value = nowTimeFormat
+                    Log.d(TAG, "Prayer times updated successfully from Aladhan API")
+                }
+                is PrayerFetchResult.Error -> {
+                    _prayerTimes.value = result.fallbackTimes
+                    _isFromApi.value = false
+                    _dataSourceInfo.value = "Kalkulasi Offline (${settings.calculationMethod})"
+                    _lastSyncTime.value = nowTimeFormat
+                    Log.w(TAG, "Using fallback times: ${result.message}")
+                }
+            }
+
+            // Reschedule device alarms for freshly synced times
+            try {
+                AlarmScheduler.scheduleAlarms(getApplication())
+            } catch (e: Exception) {
+                Log.e(TAG, "Error scheduling alarms", e)
+            }
+
+            _isRefreshing.value = false
         }
     }
 
+    /**
+     * Request live GPS location from Google Play Services Location Provider
+     * and fetch accurate prayer times from Aladhan API for those exact coordinates.
+     */
     @SuppressLint("MissingPermission")
     fun requestGpsLocation(onLocationPermissionNeeded: () -> Unit) {
-        if (!settings.useGps) return
-
+        settings.useGps = true
         _isRefreshing.value = true
         val cancellationTokenSource = CancellationTokenSource()
 
@@ -236,27 +288,33 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
                 if (location != null) {
                     settings.latitude = location.latitude.toFloat()
                     settings.longitude = location.longitude.toFloat()
-                    settings.cityName = "Lokasi Saya (GPS)"
-                    _currentLocationName.value = settings.cityName
+                    val locLabel = "Lokasi Saya (GPS)"
+                    settings.cityName = locLabel
+                    _currentLocationName.value = locLabel
 
-                    Log.d(TAG, "GPS location parsed: Lat: ${location.latitude}, Lng: ${location.longitude}")
-                    loadPrayerTimes()
+                    Log.d(TAG, "GPS location acquired: Lat=${location.latitude}, Lng=${location.longitude}")
+                    fetchPrayerTimes(location.latitude, location.longitude, locLabel)
                 } else {
-                    Log.d(TAG, "GPS location returned null, falling back or trying last location.")
+                    Log.d(TAG, "GPS location returned null, falling back to lastLocation.")
                     fusedLocationClient.lastLocation.addOnSuccessListener { lastLoc: Location? ->
                         if (lastLoc != null) {
                             settings.latitude = lastLoc.latitude.toFloat()
                             settings.longitude = lastLoc.longitude.toFloat()
-                            settings.cityName = "Lokasi Saya (GPS)"
-                            _currentLocationName.value = settings.cityName
-                            loadPrayerTimes()
+                            val locLabel = "Lokasi Saya (GPS)"
+                            settings.cityName = locLabel
+                            _currentLocationName.value = locLabel
+                            fetchPrayerTimes(lastLoc.latitude, lastLoc.longitude, locLabel)
+                        } else {
+                            // Fallback to configured coordinates
+                            fetchPrayerTimes(settings.latitude.toDouble(), settings.longitude.toDouble(), settings.cityName)
                         }
+                    }.addOnFailureListener {
+                        fetchPrayerTimes(settings.latitude.toDouble(), settings.longitude.toDouble(), settings.cityName)
                     }
                 }
-                _isRefreshing.value = false
             }.addOnFailureListener { e ->
-                Log.e(TAG, "Failed to get current GPS location.", e)
-                _isRefreshing.value = false
+                Log.e(TAG, "Failed to get current GPS location: ${e.message}", e)
+                fetchPrayerTimes(settings.latitude.toDouble(), settings.longitude.toDouble(), settings.cityName)
             }
         } catch (e: SecurityException) {
             Log.e(TAG, "Location permission missing or disabled.", e)
@@ -271,6 +329,14 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
         settings.latitude = lat.toFloat()
         settings.longitude = lng.toFloat()
         _currentLocationName.value = cityName
-        loadPrayerTimes()
+        fetchPrayerTimes(lat, lng, cityName)
+    }
+
+    fun forceRefreshAladhanApi() {
+        if (settings.useGps) {
+            requestGpsLocation { }
+        } else {
+            loadPrayerTimes()
+        }
     }
 }
