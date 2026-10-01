@@ -236,8 +236,8 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                 }
             }
 
-            // APK & GitHub Category
-            CategoryHeader("Aplikasi & Rilis APK", Icons.Default.Android)
+            // Category Unduh APK Debug Langsung
+            CategoryHeader("Aplikasi & Unduh APK", Icons.Default.Android)
             Card(
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -248,38 +248,34 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                val clip = android.content.ClipData.newPlainText(
-                                    "Format Link Unduh GitHub",
-                                    "https://github.com/<username>/<repo>/releases/download/v1.0.0/app-debug.apk"
-                                )
-                                clipboard.setPrimaryClip(clip)
-                                Toast.makeText(context, "Format link rilis GitHub disalin ke clipboard!", Toast.LENGTH_SHORT).show()
+                                com.example.utils.ApkDownloadHelper.downloadAndSaveApk(context)
                             }
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = 8.dp)
+                            .testTag("row_download_apk_settings"),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), RoundedCornerShape(10.dp)),
+                                .size(42.dp)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Download,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(16.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "File APK: app-debug.apk",
+                                text = "Download Debug Release APK",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp
                             )
                             Text(
-                                text = "app/build/outputs/apk/debug/app-debug.apk • Klik untuk salin link rilis GitHub.",
+                                text = "Pencet untuk langsung download file APK ke folder Download HP.",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
