@@ -8,6 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.database.PrayerNotificationLog
 import com.example.data.database.PrayerLogRepository
 import com.example.data.model.PrayerTimes
+import com.example.data.network.aladhan.AladhanRepository
+import com.example.data.network.aladhan.PrayerFetchResult
 import com.example.data.preferences.SettingsManager
 import com.example.services.AdzanReceiver
 import com.example.services.LocationService
@@ -37,6 +39,7 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
     private val TAG = "PrayerViewModel"
     private val settings = SettingsManager(application)
     private val locationService = LocationService(application)
+    private val aladhanRepo = AladhanRepository()
     private val prayerLogRepo = PrayerLogRepository(application)
 
     private val _prayerTimes = MutableStateFlow<PrayerTimes?>(null)
@@ -221,7 +224,8 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * Calculates prayer times with high astronomical precision using current coordinates and method
+     * Fetches prayer times from Aladhan API service via Retrofit
+     * with fallback to offline astronomical calculation.
      */
     private fun fetchPrayerTimes(latitude: Double, longitude: Double, locationLabel: String) {
         viewModelScope.launch {
@@ -229,20 +233,28 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
             val nowTimeFormat = SimpleDateFormat("HH:mm", Locale.US).format(Date())
 
             try {
-                val cal = Calendar.getInstance()
-                val calculatedTimes = PrayerTimeCalculator.calculateTimes(
+                val result = aladhanRepo.getPrayerTimes(
                     latitude = latitude,
                     longitude = longitude,
-                    method = settings.calculationMethod,
-                    calendar = cal
+                    calculationMethod = settings.calculationMethod
                 )
-                val enrichedTimes = PrayerTimeCalculator.enrichWithCountdown(calculatedTimes)
 
-                _prayerTimes.value = enrichedTimes
-                _isFromApi.value = true
-                _dataSourceInfo.value = if (settings.useGps) "GPS Akurat (${settings.calculationMethod})" else "Koordinat: $locationLabel"
-                _lastSyncTime.value = nowTimeFormat
-                Log.d(TAG, "Prayer times calculated successfully for $locationLabel")
+                when (result) {
+                    is PrayerFetchResult.Success -> {
+                        _prayerTimes.value = result.prayerTimes
+                        _isFromApi.value = true
+                        _dataSourceInfo.value = if (settings.useGps) "Aladhan API (GPS Akurat)" else "Aladhan API ($locationLabel)"
+                        _lastSyncTime.value = nowTimeFormat
+                        Log.d(TAG, "Prayer times fetched from Aladhan Retrofit API for $locationLabel")
+                    }
+                    is PrayerFetchResult.Error -> {
+                        _prayerTimes.value = result.fallbackTimes
+                        _isFromApi.value = false
+                        _dataSourceInfo.value = "Kalkulasi Offline (${settings.calculationMethod})"
+                        _lastSyncTime.value = nowTimeFormat
+                        Log.w(TAG, "Aladhan API fallback used: ${result.message}")
+                    }
+                }
 
                 // Reschedule device alarms for freshly synced times
                 try {

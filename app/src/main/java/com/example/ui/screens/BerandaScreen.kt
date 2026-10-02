@@ -789,7 +789,7 @@ fun ManualLocationFastSelector(viewModel: PrayerViewModel) {
                 exit = shrinkVertically() + fadeOut()
             ) {
                 Column(modifier = Modifier.padding(top = 12.dp)) {
-                    Divider(modifier = Modifier.padding(bottom = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),

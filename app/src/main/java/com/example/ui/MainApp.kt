@@ -38,7 +38,7 @@ sealed class Screen(val route: String, val title: String, val icon: androidx.com
     object Prayer : Screen(ROUTE_PRAYER, "Jadwal", Icons.Default.CalendarMonth)
     object Qibla : Screen(ROUTE_QIBLA, "Kiblat", Icons.Default.Explore)
     object Chat : Screen(ROUTE_CHAT, "AI", Icons.Default.AutoAwesome)
-    object Notifications : Screen(ROUTE_NOTIFICATIONS, "WA Notif", Icons.Default.Message)
+    object Notifications : Screen(ROUTE_NOTIFICATIONS, "WA Notif", Icons.Default.NotificationsActive)
     object Settings : Screen(ROUTE_SETTINGS, "Pengaturan", Icons.Default.Settings)
 }
 
@@ -51,6 +51,7 @@ fun MainApp() {
     val chatViewModel: ChatViewModel = viewModel()
     val waViewModel: WaNotificationViewModel = viewModel()
     val settingsViewModel: SettingsViewModel = viewModel()
+    val authViewModel: AuthViewModel = viewModel()
 
     val darkModePreference by settingsViewModel.darkMode.collectAsState()
     val isSystemDark = isSystemInDarkTheme()
@@ -126,7 +127,7 @@ fun MainApp() {
                         WaNotificationScreen(viewModel = waViewModel)
                     }
                     composable(ROUTE_SETTINGS) {
-                        SettingsScreen(viewModel = settingsViewModel)
+                        SettingsScreen(viewModel = settingsViewModel, authViewModel = authViewModel)
                     }
                 }
             }

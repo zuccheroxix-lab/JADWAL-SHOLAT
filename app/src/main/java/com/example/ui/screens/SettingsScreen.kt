@@ -20,12 +20,29 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.shape.CircleShape
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.ui.viewmodel.AuthViewModel
 import com.example.ui.viewmodel.SettingsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel) {
+fun SettingsScreen(
+    viewModel: SettingsViewModel,
+    authViewModel: AuthViewModel = viewModel()
+) {
     val context = LocalContext.current
+    val currentUser by authViewModel.currentUser.collectAsState()
+    val isAuthLoading by authViewModel.isAuthLoading.collectAsState()
+    val todayPrayerChecks by authViewModel.todayPrayerChecks.collectAsState()
+
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        authViewModel.handleGoogleSignInResult(result.data)
+    }
     val darkMode by viewModel.darkMode.collectAsState()
     val calcMethod by viewModel.calcMethod.collectAsState()
     val adzanSound by viewModel.adzanSound.collectAsState()
@@ -78,7 +95,7 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                         tag = "adzan_notif_switch"
                     )
 
-                    Divider(modifier = Modifier.padding(vertical = 12.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
                     // 10 minutes pre reminder
                     RowSettingSwitch(
@@ -89,7 +106,7 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                         tag = "pre_reminder_switch"
                     )
 
-                    Divider(modifier = Modifier.padding(vertical = 12.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
                     // Fasting reminder
                     RowSettingSwitch(
@@ -124,7 +141,7 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                         tag = "calc_method_row"
                     )
 
-                    Divider(modifier = Modifier.padding(vertical = 12.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
                     // Sound Adzan selection
                     RowDropdown(
@@ -165,7 +182,7 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                         tag = "theme_row"
                     )
 
-                    Divider(modifier = Modifier.padding(vertical = 12.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
                     // Language selections
                     RowDropdown(
@@ -231,6 +248,164 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        }
+                    }
+                }
+            }
+
+            // Category Akun & Cloud Firestore
+            CategoryHeader("Akun & Sinkronisasi Cloud (Firebase)", Icons.Default.CloudSync)
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = CardDefaults.outlinedCardBorder()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    val user = currentUser
+                    if (user != null) {
+                        // User Signed In
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = (user.displayName ?: user.email ?: "U").take(1).uppercase(),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 20.sp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = user.displayName ?: "Hamba Allah",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
+                                )
+                                Text(
+                                    text = user.email ?: (if (user.isAnonymous) "Akun Tamu (Tersinkron Cloud)" else "Pengguna Terdaftar"),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            IconButton(onClick = { authViewModel.signOut() }) {
+                                Icon(
+                                    imageVector = Icons.Default.Logout,
+                                    contentDescription = "Keluar Akun",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+                        // Cloud Firestore Status
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = Color(0xFF2E7D32),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Terhubung ke Cloud Firestore • Histori Sholat Tersimpan",
+                                fontSize = 11.sp,
+                                color = Color(0xFF2E7D32),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Real-time Firestore Prayer Tracker Checklist
+                        Text(
+                            text = "Catatan Sholat Hari Ini (Disimpan ke Firestore):",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            listOf("Subuh", "Dzuhur", "Ashar", "Maghrib", "Isya").forEach { prayerName ->
+                                val isDone = todayPrayerChecks[prayerName] ?: false
+                                FilterChip(
+                                    selected = isDone,
+                                    onClick = { authViewModel.togglePrayerDone(prayerName) },
+                                    label = { Text(prayerName, fontSize = 11.sp) },
+                                    leadingIcon = if (isDone) {
+                                        { Icon(Icons.Default.Check, null, modifier = Modifier.size(12.dp)) }
+                                    } else null
+                                )
+                            }
+                        }
+                    } else {
+                        // User Not Signed In
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudQueue,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = "Hubungkan ke Firebase & Firestore",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        text = "Cadangkan catatan sholat dan tanya-jawab AI secara otomatis ke cloud.",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Google Sign-In Button
+                            Button(
+                                onClick = {
+                                    val intent = authViewModel.getGoogleSignInIntent(context)
+                                    googleSignInLauncher.launch(intent)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("google_signin_button"),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AccountCircle,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Masuk dengan Akun Google", fontWeight = FontWeight.SemiBold)
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Guest Sign-In Button
+                            OutlinedButton(
+                                onClick = { authViewModel.signInAsGuest() },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("guest_signin_button")
+                            ) {
+                                Text("Masuk sebagai Tamu (Firebase Anonymous)")
+                            }
                         }
                     }
                 }
