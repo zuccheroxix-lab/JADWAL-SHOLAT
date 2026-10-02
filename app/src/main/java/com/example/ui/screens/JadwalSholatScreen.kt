@@ -1,5 +1,9 @@
 package com.example.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -8,24 +12,29 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Mosque
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.example.data.preferences.SettingsManager
+import com.example.ui.viewmodel.PrayerViewModel
 import com.example.utils.PrayerTimeCalculator
 import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun JadwalSholatScreen(viewModel: com.example.ui.viewmodel.PrayerViewModel? = null) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+fun JadwalSholatScreen(viewModel: PrayerViewModel? = null) {
+    val context = LocalContext.current
     val settings = remember { SettingsManager(context) }
     var selectedTab by remember { mutableStateOf(0) } // 0 = Hari Ini, 1 = Besok
 
@@ -33,7 +42,19 @@ fun JadwalSholatScreen(viewModel: com.example.ui.viewmodel.PrayerViewModel? = nu
     val calendarTomorrow = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, 1) }
 
     val vmTimes by viewModel?.prayerTimes?.collectAsState() ?: remember { mutableStateOf(null) }
-    val dataSourceInfo by viewModel?.dataSourceInfo?.collectAsState() ?: remember { mutableStateOf("Aladhan API") }
+    val dataSourceInfo by viewModel?.dataSourceInfo?.collectAsState() ?: remember { mutableStateOf("GPS & Kalender Astronomis") }
+    val isRefreshing by viewModel?.isRefreshing?.collectAsState() ?: remember { mutableStateOf(false) }
+    val currentLocationName by viewModel?.currentLocationName?.collectAsState() ?: remember { mutableStateOf(settings.cityName) }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val fine = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        val coarse = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (fine || coarse) {
+            viewModel?.requestGpsLocation {}
+        }
+    }
 
     val timesToday = vmTimes ?: PrayerTimeCalculator.calculateTimes(
         settings.latitude.toDouble(),
@@ -59,6 +80,32 @@ fun JadwalSholatScreen(viewModel: com.example.ui.viewmodel.PrayerViewModel? = nu
         topBar = {
             TopAppBar(
                 title = { Text("Jadwal Sholat AI", fontWeight = FontWeight.Bold) },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            val fineCheck = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.ACCESS_FINE_LOCATION
+                            )
+                            if (fineCheck == PackageManager.PERMISSION_GRANTED) {
+                                viewModel?.requestGpsLocation {}
+                            } else {
+                                locationPermissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.ACCESS_FINE_LOCATION,
+                                        Manifest.permission.ACCESS_COARSE_LOCATION
+                                    )
+                                )
+                            }
+                        }
+                    ) {
+                        if (isRefreshing) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(imageVector = Icons.Default.MyLocation, contentDescription = "Deteksi GPS")
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         }
@@ -70,11 +117,11 @@ fun JadwalSholatScreen(viewModel: com.example.ui.viewmodel.PrayerViewModel? = nu
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
-            // Elegant Tab Selector
+            // Tab Selector
             TabRow(
                 selectedTabIndex = selectedTab,
                 containerColor = MaterialTheme.colorScheme.background,
-                divider = { Divider() },
+                divider = { HorizontalDivider() },
                 modifier = Modifier.padding(bottom = 16.dp)
             ) {
                 Tab(
@@ -129,6 +176,22 @@ fun JadwalSholatScreen(viewModel: com.example.ui.viewmodel.PrayerViewModel? = nu
                             fontSize = 17.sp,
                             textAlign = TextAlign.Center
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = currentLocationName,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
 
@@ -158,21 +221,29 @@ fun JadwalSholatScreen(viewModel: com.example.ui.viewmodel.PrayerViewModel? = nu
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = pray.first,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Mosque,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Text(
+                                        text = pray.first,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
                                 Text(
                                     text = pray.second,
-                                    fontWeight = FontWeight.ExtraBold,
                                     fontSize = 18.sp,
+                                    fontWeight = FontWeight.ExtraBold,
                                     color = MaterialTheme.colorScheme.primary
                                 )
                             }
                             if (idx < listPrays.size - 1) {
-                                Divider(color = MaterialTheme.colorScheme.outlineVariant)
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                             }
                         }
                     }
@@ -202,7 +273,7 @@ fun JadwalSholatScreen(viewModel: com.example.ui.viewmodel.PrayerViewModel? = nu
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "Metode perhitungan: ${settings.calculationMethod} (Koordinat GPS: ${settings.latitude}, ${settings.longitude}).",
+                                text = "Lokasi: $currentLocationName (Koordinat GPS: ${String.format(Locale.US, "%.4f, %.4f", settings.latitude, settings.longitude)}).",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

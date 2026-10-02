@@ -1,12 +1,9 @@
 package com.example.ui.screens
 
 import android.content.Context
-import android.content.Intent
-import android.provider.Settings
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -21,7 +18,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -30,7 +26,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.database.PrayerNotificationLog
-import com.example.data.database.WaNotification
 import com.example.ui.viewmodel.WaNotificationViewModel
 import com.example.utils.WhatsAppExporter
 import java.text.SimpleDateFormat
@@ -40,44 +35,22 @@ import java.util.*
 @Composable
 fun WaNotificationScreen(viewModel: WaNotificationViewModel) {
     val context = LocalContext.current
-    val selectedTab by viewModel.selectedTab.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val filterImportant by viewModel.filterOnlyImportant.collectAsState()
-    val notifications by viewModel.notifications.collectAsState()
     val prayerLogs by viewModel.prayerLogs.collectAsState()
     val prayerFilter by viewModel.prayerLogFilter.collectAsState()
 
-    var isPermissionAllowed by remember { mutableStateOf(false) }
     var showClearConfirmationDialog by remember { mutableStateOf(false) }
-
-    // Check notification listener package status on resume/reload
-    fun checkPermission() {
-        val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
-        isPermissionAllowed = flat != null && flat.contains(context.packageName)
-    }
-
-    LaunchedEffect(Unit) {
-        checkPermission()
-    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = if (selectedTab == 0) "Notifikasi WhatsApp" else "Log Sholat & Ekspor WA",
+                        text = "Log Sholat & Ekspor WA",
                         fontWeight = FontWeight.Bold
                     )
                 },
                 actions = {
-                    if (selectedTab == 0 && notifications.isNotEmpty()) {
-                        IconButton(
-                            onClick = { showClearConfirmationDialog = true },
-                            modifier = Modifier.testTag("clear_notifications_button")
-                        ) {
-                            Icon(imageVector = Icons.Default.DeleteSweep, contentDescription = "Hapus Semua Pesan")
-                        }
-                    } else if (selectedTab == 1 && prayerLogs.isNotEmpty()) {
+                    if (prayerLogs.isNotEmpty()) {
                         IconButton(
                             onClick = {
                                 val report = WhatsAppExporter.formatMultipleLogs(prayerLogs)
@@ -105,76 +78,13 @@ fun WaNotificationScreen(viewModel: WaNotificationViewModel) {
                 .background(MaterialTheme.colorScheme.background)
                 .padding(innerPadding)
         ) {
-            // Elegant Primary Tab Selector
-            TabRow(
-                selectedTabIndex = selectedTab,
-                containerColor = MaterialTheme.colorScheme.background,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { viewModel.selectTab(0) },
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Message,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Pesan WA Masuk", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                        }
-                    },
-                    modifier = Modifier.testTag("tab_wa_messages")
-                )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = { viewModel.selectTab(1) },
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.NotificationsActive,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Log Sholat & WA", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                        }
-                    },
-                    modifier = Modifier.testTag("tab_prayer_logs")
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Body depending on selected tab
-            if (selectedTab == 0) {
-                WhatsAppListenerTab(
-                    isPermissionAllowed = isPermissionAllowed,
-                    onOpenPermissionSettings = {
-                        try {
-                            context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                        } catch (e: Exception) {
-                            // ignore fallback
-                        }
-                    },
-                    onRefreshPermission = { checkPermission() },
-                    searchQuery = searchQuery,
-                    onSearchQueryChange = { viewModel.setSearchQuery(it) },
-                    filterImportant = filterImportant,
-                    onToggleFilterImportant = { viewModel.toggleFilterImportant() },
-                    notifications = notifications,
-                    onDeleteNotification = { viewModel.deleteNotification(it) }
-                )
-            } else {
-                PrayerNotificationLogTab(
-                    logs = prayerLogs,
-                    currentFilter = prayerFilter,
-                    onSelectFilter = { viewModel.setPrayerLogFilter(it) },
-                    onDeleteLog = { viewModel.deletePrayerLog(it) },
-                    onAddSampleLog = { prayer, isPre -> viewModel.addSamplePrayerLog(prayer, isPre) }
-                )
-            }
+            PrayerNotificationLogTab(
+                logs = prayerLogs,
+                currentFilter = prayerFilter,
+                onSelectFilter = { viewModel.setPrayerLogFilter(it) },
+                onDeleteLog = { viewModel.deletePrayerLog(it) },
+                onAddSampleLog = { prayer, isPre -> viewModel.addSamplePrayerLog(prayer, isPre) }
+            )
         }
     }
 
@@ -184,27 +94,19 @@ fun WaNotificationScreen(viewModel: WaNotificationViewModel) {
             onDismissRequest = { showClearConfirmationDialog = false },
             title = {
                 Text(
-                    text = if (selectedTab == 0) "Hapus Semua Pesan?" else "Hapus Semua Log Sholat?",
+                    text = "Hapus Semua Log Sholat?",
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Text(
-                    text = if (selectedTab == 0) {
-                        "Apakah Anda yakin ingin menghapus seluruh riwayat pesan WhatsApp yang tersimpan secara lokal?"
-                    } else {
-                        "Apakah Anda yakin ingin membersihkan seluruh riwayat notifikasi waktu sholat tersimpan?"
-                    }
+                    text = "Apakah Anda yakin ingin membersihkan seluruh riwayat notifikasi waktu sholat yang tersimpan?"
                 )
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        if (selectedTab == 0) {
-                            viewModel.clearAll()
-                        } else {
-                            viewModel.clearAllPrayerLogs()
-                        }
+                        viewModel.clearAllPrayerLogs()
                         showClearConfirmationDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
@@ -438,6 +340,7 @@ private fun PrayerLogCard(
     onShareWa: () -> Unit,
     onCopyWa: () -> Unit
 ) {
+    val context = LocalContext.current
     val dateSdf = SimpleDateFormat("dd MMM yyyy, HH:mm:ss", Locale("id", "ID"))
     val recordedTimeStr = dateSdf.format(Date(log.timestamp))
 
@@ -450,53 +353,41 @@ private fun PrayerLogCard(
         Column(modifier = Modifier.padding(14.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(32.dp)
                             .background(
-                                if (log.isPreReminder) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
-                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                CircleShape
+                                color = if (log.isPreReminder) 
+                                    MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f)
+                                else 
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(8.dp)
                             ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (log.isPreReminder) Icons.Default.HourglassBottom else Icons.Default.Mosque,
+                            imageVector = if (log.isPreReminder) Icons.Default.Alarm else Icons.Default.NotificationsActive,
                             contentDescription = null,
                             tint = if (log.isPreReminder) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
+
                     Spacer(modifier = Modifier.width(10.dp))
+
                     Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = log.prayerName,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = if (log.isPreReminder) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.primaryContainer
-                            ) {
-                                Text(
-                                    text = if (log.isPreReminder) "10 Menit Sebelum" else "Waktu Sholat",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (log.isPreReminder) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
                         Text(
-                            text = "Jadwal: ${log.prayerTime} WIB" + if (log.locationName.isNotEmpty()) " • ${log.locationName}" else "",
-                            fontSize = 12.sp,
+                            text = log.title,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            text = "Waktu Sholat: ${log.prayerTime} • ${log.locationName}",
+                            fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -562,230 +453,6 @@ private fun PrayerLogCard(
                     Text("Kirim WA", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun WhatsAppListenerTab(
-    isPermissionAllowed: Boolean,
-    onOpenPermissionSettings: () -> Unit,
-    onRefreshPermission: () -> Unit,
-    searchQuery: String,
-    onSearchQueryChange: (String) -> Unit,
-    filterImportant: Boolean,
-    onToggleFilterImportant: () -> Unit,
-    notifications: List<WaNotification>,
-    onDeleteNotification: (Long) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp)
-    ) {
-        // Permission Alert prompt if not allowed
-        if (!isPermissionAllowed) {
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "Izin Pembaca Pesan WhatsApp Dibutuhkan",
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            fontSize = 14.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Aplikasi memerlukan izin Notification Listener agar dapat mencatat pengingat penting dari WhatsApp secara lokal tanpa server pihak ketiga.",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.9f)
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = onOpenPermissionSettings,
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                        ) {
-                            Text("Buka Pengaturan Izin")
-                        }
-                        OutlinedButton(onClick = onRefreshPermission) {
-                            Text("Cek Status")
-                        }
-                    }
-                }
-            }
-        }
-
-        // Search and Filter Bar
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchQueryChange,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            placeholder = { Text("Cari pesan atau kontak WA...") },
-            leadingIcon = { Icon(imageVector = Icons.Default.Search, contentDescription = null) },
-            trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { onSearchQueryChange("") }) {
-                        Icon(imageVector = Icons.Default.Close, contentDescription = "Clear")
-                    }
-                }
-            },
-            shape = RoundedCornerShape(16.dp),
-            singleLine = true
-        )
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            FilterChip(
-                selected = filterImportant,
-                onClick = onToggleFilterImportant,
-                label = { Text("Hanya Pesan Penting / Sholat") },
-                leadingIcon = {
-                    if (filterImportant) {
-                        Icon(imageVector = Icons.Default.Check, contentDescription = null)
-                    }
-                }
-            )
-
-            Text(
-                text = "${notifications.size} pesan",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        if (notifications.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Default.MarkChatUnread,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "Belum Ada Pesan WhatsApp Masuk",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Ketika WhatsApp menerima pesan di latar belakang, pesan akan otomatis terdeteksi dan tercatat rapi di sini.",
-                        fontSize = 13.sp,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(bottom = 24.dp)
-            ) {
-                items(notifications, key = { it.id }) { item ->
-                    WaMessageItemCard(item = item, onDelete = { onDeleteNotification(item.id) })
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun WaMessageItemCard(item: WaNotification, onDelete: () -> Unit) {
-    val sdf = SimpleDateFormat("HH:mm - dd MMM", Locale("id", "ID"))
-    val formattedDate = sdf.format(Date(item.timestamp))
-
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = item.sender.take(1).uppercase(),
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = item.sender,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp
-                        )
-                        Text(
-                            text = formattedDate,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (item.isImportant) {
-                        Badge(containerColor = MaterialTheme.colorScheme.primary) {
-                            Text("Penting", modifier = Modifier.padding(horizontal = 4.dp))
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.DeleteOutline,
-                            contentDescription = "Hapus item",
-                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = item.message,
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurface
-            )
         }
     }
 }

@@ -188,7 +188,7 @@ fun BrowserNotificationCard(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "zucchero-app.com mengatakan:",
+                    text = "Pengingat Sholat ZUCCHERO:",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                     fontWeight = FontWeight.Medium,
