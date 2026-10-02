@@ -244,14 +244,15 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                 border = CardDefaults.outlinedCardBorder()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
+                    // Debug APK
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                com.example.utils.ApkDownloadHelper.downloadAndSaveApk(context)
+                                com.example.utils.ApkDownloadHelper.saveAndInstallDebugApk(context)
                             }
                             .padding(vertical = 8.dp)
-                            .testTag("row_download_apk_settings"),
+                            .testTag("row_download_debug_apk"),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
@@ -270,12 +271,53 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                         Spacer(modifier = Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Download Debug Release APK",
+                                text = "DOWNLOAD DEBUG APK",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp
                             )
                             Text(
-                                text = "Pencet untuk langsung download file APK ke folder Download HP.",
+                                text = "Ekspor dan simpan app-debug.apk ke folder Download.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+
+                    // Release APK
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                com.example.utils.ApkDownloadHelper.saveAndInstallReleaseApk(context)
+                            }
+                            .padding(vertical = 8.dp)
+                            .testTag("row_download_release_apk"),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "DOWNLOAD RELEASE APK",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                text = "Ekspor dan simpan app-release.apk ke folder Download.",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
